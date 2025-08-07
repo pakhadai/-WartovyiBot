@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Панель керування</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <div id="toast-notification" class="toast"></div>
+
+    <main id="app-container">
+        <div id="home-page" class="page active">
+            <header class="page-header">
+                <img src="logo-rm.png" alt="Bot Logo" class="logo">
+                <h1 data-translate="welcome_title">Вітаємо!</h1>
+                <p class="subtitle" data-translate="welcome_subtitle">Це ваша персональна панель керування ботом.</p>
+            </header>
+            <div class="card">
+                <h2 data-translate="features_title">Основні функції</h2>
+                <ul>
+                    <li data-translate="feature_captcha">🛡️ Розумна CAPTCHA для нових учасників</li>
+                    <li data-translate="feature_spam_filter">🔎 Гнучкий спам-фільтр з системою балів</li>
+                    <li data-translate="feature_punishments">⚖️ Автоматичні покарання для порушників</li>
+                    <li data-translate="feature_individual_settings">⚙️ Індивідуальні налаштування для кожної групи</li>
+                </ul>
+            </div>
+        </div>
+
+        <div id="settings-page" class="page">
+            <header class="page-header">
+                <h1 data-translate="settings_title">Налаштування</h1>
+                <p class="subtitle" data-translate="settings_subtitle">Керуйте параметрами для обраного чату</p>
+            </header>
+            <div class="card">
+                <h2 data-translate="select_chat_title">Вибір групи/каналу</h2>
+                <select id="chat-selector" class="chat-selector">
+                    <option value="" data-translate="loading_chats">Завантаження...</option>
+                </select>
+            </div>
+            <div id="settings-content" class="hidden">
+                <section class="card">
+                    <h2 data-translate="general_settings_title">Загальні налаштування</h2>
+                    <div id="settings-loader" class="loader"></div>
+                    <div id="settings-container" class="hidden">
+                        <div class="setting-item">
+                            <label for="captcha-toggle" data-translate="captcha_toggle_label">CAPTCHA для нових</label>
+                            <label class="switch"><input type="checkbox" id="captcha-toggle"><span class="slider round"></span></label>
+                        </div>
+                        <div class="setting-item">
+                            <label for="spamfilter-toggle" data-translate="spamfilter_toggle_label">Спам-фільтр</label>
+                            <label class="switch"><input type="checkbox" id="spamfilter-toggle"><span class="slider round"></span></label>
+                        </div>
+                    </div>
+                </section>
+                <section class="card">
+                    <h2 data-translate="spam_words_title">Керування спам-словами</h2>
+                    <div id="spam-lists-settings">
+                        <div class="setting-item">
+                            <label data-translate="use_global_list_label">Використовувати глобальну базу</label>
+                            <label class="switch"><input type="checkbox" id="use-global-list-toggle"><span class="slider round"></span></label>
+                        </div>
+                        <div class="setting-item">
+                            <label data-translate="use_custom_list_label">Використовувати локальну базу</label>
+                            <label class="switch"><input type="checkbox" id="use-custom-list-toggle"><span class="slider round"></span></label>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <div id="stats-page" class="page">
+            <header class="page-header"><h1 data-translate="stats_title">Статистика</h1></header>
+            <div class="card"><p data-translate="stats_stub_text">📊 Цей розділ наразі в розробці.</p></div>
+        </div>
+        <div id="premium-page" class="page">
+            <header class="page-header"><h1 data-translate="premium_title">Преміум</h1></header>
+            <div class="card"><p data-translate="premium_stub_text">💎 Незабаром тут з'являться преміум-функції.</p></div>
+        </div>
+    </main>
+
+    <nav id="bottom-nav">
+        <button class="nav-btn active" data-page="home-page" data-icon="🏠" data-translate="nav_home">Головна</button>
+        <button class="nav-btn" data-page="settings-page" data-icon="⚙️" data-translate="nav_settings">Налаштування</button>
+        <button class="nav-btn" data-page="stats-page" data-icon="📊" data-translate="nav_stats">Статистика</button>
+        <button class="nav-btn" data-page="premium-page" data-icon="💎" data-translate="nav_premium">Преміум</button>
+    </nav>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
