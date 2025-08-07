@@ -4,6 +4,7 @@ from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
 from bot.infrastructure.localization import get_text
 from bot.infrastructure.database import log_action, increment_daily_stat
+from bot.features.message_filtering.delete_message_job import delete_message_job
 
 MAX_ATTEMPTS = 2
 
@@ -25,7 +26,6 @@ async def captcha_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer(get_text(lang, "captcha_not_for_you"), show_alert=True)
         return
 
-    # Ініціалізуємо лічильник спроб
     if 'captcha_attempts' not in context.chat_data:
         context.chat_data['captcha_attempts'] = {}
     if user_id_for_captcha not in context.chat_data['captcha_attempts']:
@@ -36,8 +36,8 @@ async def captcha_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for job in context.job_queue.get_jobs_by_name(f"captcha_timeout_{user_id_for_captcha}_{query.message.chat.id}"):
             job.schedule_removal()
 
-            log_action(query.message.chat.id, user_id_for_captcha, 'captcha_passed')
-            increment_daily_stat(query.message.chat.id, 'captcha_passed')
+        log_action(query.message.chat.id, user_id_for_captcha, 'captcha_passed')
+        increment_daily_stat(query.message.chat.id, 'captcha_passed')
 
         try:
             await context.bot.restrict_chat_member(
@@ -55,10 +55,19 @@ async def captcha_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 get_text(lang, "captcha_verified", user_mention=user_who_clicked.mention_html()),
                 parse_mode=ParseMode.HTML
             )
+
+            # --- КРОК 2: Додаємо завдання на видалення повідомлення через 30 секунд ---
+            context.job_queue.run_once(
+                delete_message_job,
+                30,
+                data={'chat_id': query.message.chat_id, 'message_id': query.message.message_id},
+                name=f"delete_verified_msg_{query.message.message_id}"
+            )
+
         except Exception as e:
             logging.error(f"Помилка при знятті обмежень: {e}")
         finally:
-            if user_id_for_captcha in context.chat_data['captcha_attempts']:
+            if user_id_for_captcha in context.chat_data.get('captcha_attempts', {}):
                 del context.chat_data['captcha_attempts'][user_id_for_captcha]
     else:
         context.chat_data['captcha_attempts'][user_id_for_captcha] += 1
@@ -70,8 +79,8 @@ async def captcha_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"captcha_timeout_{user_id_for_captcha}_{query.message.chat.id}"):
                 job.schedule_removal()
 
-                log_action(query.message.chat.id, user_id_for_captcha, 'captcha_failed')
-                increment_daily_stat(query.message.chat.id, 'captcha_failed')
+            log_action(query.message.chat.id, user_id_for_captcha, 'captcha_failed')
+            increment_daily_stat(query.message.chat.id, 'captcha_failed')
 
             try:
                 await query.edit_message_text(get_text(lang, "captcha_fail_kick"))
@@ -81,7 +90,7 @@ async def captcha_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logging.error(f"Помилка при кіку користувача: {e}")
             finally:
-                if user_id_for_captcha in context.chat_data['captcha_attempts']:
+                if user_id_for_captcha in context.chat_data.get('captcha_attempts', {}):
                     del context.chat_data['captcha_attempts'][user_id_for_captcha]
         else:
             attempts_left = MAX_ATTEMPTS - attempts

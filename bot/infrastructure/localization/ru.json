@@ -61,5 +61,11 @@
   "spam_threshold_label_status": "Порог спама:",
   "warned_users_label": "Пользователей с предупреждениями:",
   "blocklist_size_label": "Слов в чёрном списке:",
-  "whitelist_size_label": "Слов в белом списке:"
+  "whitelist_size_label": "Слов в белом списке:",
+  "blocklist_title": "Чёрный список",
+  "whitelist_title": "Белый список",
+  "add_new_word_title_whitelist": "Добавить слово-исключение",
+  "current_list": "Текущий список",
+  "manage_blocklist_btn": "Управлять Чёрным списком",
+  "manage_whitelist_btn": "Управлять Белым списком"
 }

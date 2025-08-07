@@ -1,4 +1,6 @@
 import json
+import logging
+import base64
 from fastapi import APIRouter, HTTPException, Body, Header
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -36,13 +38,19 @@ class Chat(BaseModel):
 
 # --- Функції для перевірки прав доступу ---
 def get_user_id_from_header(user_data_raw: str) -> int:
-    """Витягує user_id з хедеру X-User-Data."""
+    """Витягує user_id з хедеру X-User-Data, розкодовуючи його з Base64."""
     if not user_data_raw:
         raise HTTPException(status_code=401, detail="Not authorized: Missing user data header")
     try:
-        user_info = json.loads(user_data_raw)
+        # 1. Розкодовуємо рядок з Base64
+        decoded_bytes = base64.b64decode(user_data_raw)
+        # 2. Декодуємо байти в рядок UTF-8
+        user_info_json = decoded_bytes.decode('utf-8')
+        # 3. Парсимо JSON
+        user_info = json.loads(user_info_json)
         return user_info['id']
-    except (json.JSONDecodeError, KeyError):
+    except (json.JSONDecodeError, KeyError, Exception) as e:
+         logging.error(f"Could not decode user data: {e}")
          raise HTTPException(status_code=400, detail="Invalid user data format")
 
 async def verify_user_access(user_data_raw: str, chat_id: int) -> int:
@@ -69,11 +77,19 @@ async def get_translations(lang_code: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Could not load translations: {e}")
 
+
 @router.get("/api/my-chats", response_model=List[Chat])
 async def get_my_chats(x_user_data: str = Header(None)):
     """Повертає список чатів, якими керує користувач."""
+    # Отримуємо ID користувача з хедеру
     user_id = get_user_id_from_header(x_user_data)
-    return get_user_chats(user_id)
+
+    # Викликаємо виправлену функцію з бази даних для отримання чатів
+    chats = get_user_chats(user_id)
+
+    # Повертаємо результат
+    return chats
+
 
 # --- Роути для Налаштувань ---
 

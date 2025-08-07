@@ -154,9 +154,10 @@ def is_group_admin(user_id: int, group_id: int) -> bool:
 
 
 def get_user_chats(user_id: int) -> list:
+    """Отримує список чатів, якими керує користувач."""
     conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
+
     if user_id == ADMIN_ID:
         cursor.execute("SELECT group_id, group_name FROM group_settings ORDER BY group_name")
     else:
@@ -167,7 +168,14 @@ def get_user_chats(user_id: int) -> list:
             WHERE ga.user_id = ?
             ORDER BY gs.group_name
         """, (user_id,))
-    chats = [{"id": row['group_id'], "name": row['group_name']} for row in cursor.fetchall()]
+
+    # Правильний спосіб: спочатку отримуємо всі дані, потім працюємо з ними
+    rows = cursor.fetchall()
+    logging.info(f"DB query for user {user_id} returned {len(rows)} rows.")
+
+    # Використовуємо числові індекси для сумісності з тестами
+    chats = [{"id": row[0], "name": row[1]} for row in rows]
+
     conn.close()
     return chats
 
@@ -190,7 +198,7 @@ def get_spam_triggers() -> dict:
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("SELECT trigger, score FROM spam_triggers")
-    triggers = {row['trigger']: row['score'] for row in cursor.fetchall()}
+    triggers = {row[0]: row[1] for row in cursor.fetchall()}
     conn.close()
     return triggers
 

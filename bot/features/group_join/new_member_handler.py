@@ -3,44 +3,43 @@ from telegram import Update, ChatPermissions
 from telegram.ext import ContextTypes
 from telegram.constants import ChatMemberStatus, ParseMode
 
-# Зверніть увагу на зміну в імпортах
-from bot.infrastructure.database import get_group_settings
+from bot.infrastructure.database import get_group_settings, log_action, increment_daily_stat
 from bot.infrastructure.localization import get_text
 from .captcha_service import create_captcha_keyboard
 from .captcha_timeout import captcha_timeout
-from bot.infrastructure.database import log_action, increment_daily_stat
 
 async def new_member_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обробляє вхід нових користувачів, враховуючи налаштування групи."""
-    chat = update.chat_member.chat
+    if not update.chat_member:
+        return
 
-    # --- ОСНОВНА ЗМІНА ---
-    # Отримуємо індивідуальні налаштування для цього чату
+    chat = update.chat_member.chat
     settings = get_group_settings(chat.id)
 
     if not settings['captcha_enabled']:
-        return  # Виходимо, якщо CAPTCHA для цієї групи вимкнена
+        return
 
     old_member = update.chat_member.old_chat_member
     new_member = update.chat_member.new_chat_member
 
-    user_was_member = old_member is not None and old_member.status not in [ChatMemberStatus.LEFT,
-                                                                           ChatMemberStatus.BANNED]
+    user_was_member = old_member and old_member.status not in [ChatMemberStatus.LEFT, ChatMemberStatus.BANNED]
     user_is_now_member = new_member.status not in [ChatMemberStatus.LEFT, ChatMemberStatus.BANNED]
 
     if not (user_is_now_member and not user_was_member):
         return
 
     user = new_member.user
-    log_action(chat.id, user.id, 'user_joined')
-    increment_daily_stat(chat.id, 'users_joined')
-    lang = user.language_code or 'en'
-
     if user.is_bot:
         return
 
-    logging.info(
-        f"Новий користувач {user.full_name} ({user.id}) в чаті {chat.title}. Застосовуємо CAPTCHA згідно з налаштуваннями групи.")
+    # --- КЛЮЧОВА ЗМІНА ТУТ ---
+    # Додаємо логування, щоб бачити, яку мову надсилає Telegram
+    logging.info(f"New user {user.full_name} ({user.id}) joined chat {chat.title}. Received language_code: '{user.language_code}'")
+    lang = user.language_code or 'en' # Залишаємо надійну логіку з запасним варіантом
+    # --- КІНЕЦЬ ЗМІНИ ---
+
+    log_action(chat.id, user.id, 'user_joined')
+    increment_daily_stat(chat.id, 'users_joined')
 
     try:
         await context.bot.restrict_chat_member(

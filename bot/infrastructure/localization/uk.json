@@ -81,5 +81,11 @@
     "spam_threshold_label_status": "Поріг спаму:",
     "warned_users_label": "Користувачів з попередженнями:",
     "blocklist_size_label": "Слів у чорному списку:",
-    "whitelist_size_label": "Слів у білому списку:"
+    "whitelist_size_label": "Слів у білому списку:",
+    "blocklist_title": "Чорний список",
+    "whitelist_title": "Білий список",
+    "add_new_word_title_whitelist": "Додати слово-виняток",
+    "current_list": "Поточний список",
+    "manage_blocklist_btn": "Керувати Чорним списком",
+    "manage_whitelist_btn": "Керувати Білим списком"
 }

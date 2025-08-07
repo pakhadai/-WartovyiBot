@@ -81,6 +81,12 @@
     "spam_threshold_label_status": "Spam threshold:",
     "warned_users_label": "Users with warnings:",
     "blocklist_size_label": "Words in blocklist:",
-    "whitelist_size_label": "Words in whitelist:"
+    "whitelist_size_label": "Words in whitelist:",
+    "blocklist_title": "Blocklist",
+    "whitelist_title": "Whitelist",
+    "add_new_word_title_whitelist": "Add exception word",
+    "current_list": "Current list",
+    "manage_blocklist_btn": "Manage Blocklist",
+    "manage_whitelist_btn": "Manage Whitelist"
 
 }

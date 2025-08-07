@@ -7,7 +7,7 @@ from bot.infrastructure.database import add_group_if_not_exists, set_group_admin
 
 
 async def my_chat_member_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обробляє додавання/видалення бота з чату та зміну його статусу."""
+
     my_chat_member = update.my_chat_member
 
     if not my_chat_member:
@@ -20,7 +20,10 @@ async def my_chat_member_handler(update: Update, context: ContextTypes.DEFAULT_T
     # Бот був доданий в новий чат як адміністратор
     if new_status == ChatMemberStatus.ADMINISTRATOR:
         logging.info(f"Бот був доданий в чат '{chat.title}' ({chat.id}) користувачем {user.full_name} ({user.id})")
-
+        add_group_if_not_exists(chat.id, chat.title)
+        logging.info(f"[DEBUG] Ensured group {chat.id} exists in DB.")
+        set_group_admin(chat.id, user.id)
+        logging.info(f"[DEBUG] Set user {user.id} as admin for group {chat.id}.")
         # Додаємо групу в БД, якщо її там немає
         add_group_if_not_exists(chat.id, chat.title)
 

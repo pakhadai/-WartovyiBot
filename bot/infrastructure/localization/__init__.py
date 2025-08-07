@@ -28,10 +28,13 @@ def load_translation_file(lang_code: str) -> dict:
         return json.load(f)
 
 
-def get_user_language(language_code: str) -> str:
-    """Визначає найкращу доступну мову для користувача."""
+def get_user_language(language_code: str | None) -> str:
+    """Визначає найкращу доступну мову для користувача, безпечно обробляючи None."""
+    # Якщо language_code не існує (None) або це порожній рядок, одразу повертаємо 'en'
     if not language_code:
         return 'en'
+
+    # Решта коду залишається без змін
     lang = language_code.split('-')[0].lower()
 
     # Перевіряємо, чи існує JSON-файл для такої мови

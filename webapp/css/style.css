@@ -519,3 +519,115 @@ canvas {
         transform: translateY(0);
     }
 }
+/* Додайте цей код в кінець webapp/css/style.css */
+
+.tabs {
+    display: flex;
+    border-bottom: 2px solid var(--tg-bg);
+    margin-bottom: 20px;
+}
+.tab-btn {
+    background: none; border: none; padding: 10px 15px; cursor: pointer;
+    font-size: 16px; font-weight: 500; color: var(--tg-hint);
+    border-bottom: 3px solid transparent; margin-bottom: -2px;
+    transition: all 0.2s ease;
+}
+.tab-btn.active {
+    color: var(--tg-link);
+    border-bottom-color: var(--tg-link);
+}
+.tab-content { display: block; }
+.tab-content.hidden { display: none; }
+
+.input-group { display: flex; gap: 10px; align-items: center; }
+.input-group input { border-radius: 8px; border: 1px solid var(--tg-hint); }
+.button {
+    background-color: var(--tg-button); color: var(--tg-button-text);
+    border: none; border-radius: 8px; padding: 10px 15px;
+    font-weight: 600; cursor: pointer;
+}
+
+.word-list { list-style-type: none; padding-left: 0; }
+.word-list li {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px; background: var(--tg-bg); border-radius: 8px;
+    margin-bottom: 8px;
+}
+.word-text { font-weight: 500; }
+.word-score { background: var(--tg-hint); color: white; padding: 2px 8px; border-radius: 10px; font-size: 12px; }
+.delete-btn {
+    background: none; border: none; cursor: pointer;
+    font-size: 20px; color: var(--danger, #e74c3c);
+}
+/* ДОДАЙТЕ ЦЕЙ КОД В КІНЕЦЬ CSS-ФАЙЛУ */
+.manage-list-btn {
+    width: 100%;
+    background-color: var(--tg-bg);
+    border: 1px solid var(--tg-hint);
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--tg-text);
+    cursor: pointer;
+    margin-top: 10px;
+    text-align: center;
+}
+
+.page-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: var(--tg-bg);
+    z-index: 5000;
+    overflow-y: auto;
+    transform: translateX(100%);
+    transition: transform 0.3s ease-in-out;
+    padding: 15px;
+}
+.page-overlay:not(.hidden) {
+    transform: translateX(0);
+}
+
+.fixed-back-btn {
+    position: fixed;
+    top: 15px;
+    left: 15px;
+    background: var(--tg-secondary-bg);
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    font-size: 24px;
+    font-weight: bold;
+    color: var(--tg-text);
+    cursor: pointer;
+    z-index: 5010;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.overlay-content {
+    padding-top: 60px;
+    max-width: 600px;
+    margin: 0 auto;
+}
+.overlay-content h1 {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.word-list { list-style-type: none; padding-left: 0; }
+.word-list li {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px; background: var(--tg-secondary-bg); border-radius: 8px;
+    margin-bottom: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+.word-text { font-weight: 500; }
+.word-score { background: var(--tg-hint); color: white; padding: 2px 8px; border-radius: 10px; font-size: 12px; }
+.delete-btn {
+    background: none; border: none; cursor: pointer;
+    font-size: 24px; color: var(--danger, #e74c3c); padding: 0 10px;
+}
