@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from telegram import Update, ChatPermissions, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
-
+from bot.infrastructure.database import increment_daily_stat, log_action
 from bot.config import ADMIN_ID
 from bot.infrastructure.database import get_group_settings, add_warning, get_group_admin_id
 from bot.infrastructure.localization import get_text
@@ -13,8 +13,8 @@ from .delete_message_job import delete_message_job
 
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Обробляє текстові повідомлення, перевіряючи їх на спам згідно з
-    індивідуальними налаштуваннями групи та надсилає логи власнику групи.
+    Обробляє текстові повідомлення, викликаючи оновлений antispam_service
+    з урахуванням індивідуальних налаштувань групи.
     """
     if not update.message or not update.message.text:
         return
@@ -22,23 +22,25 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     chat = update.message.chat
 
-    # 1. Отримуємо індивідуальні налаштування для цього чату
+    increment_daily_stat(chat.id, 'messages_total')
+
     settings = get_group_settings(chat.id)
 
-    # 2. Перевіряємо, чи увімкнений спам-фільтр для цієї групи
     if not settings['spam_filter_enabled']:
         return
 
-    # 3. Пропускаємо повідомлення від Власника Бота та Власника цієї Групи
     group_admin_id = get_group_admin_id(chat.id)
     if user.id == ADMIN_ID or user.id == group_admin_id:
         return
 
-    # 4. Розраховуємо рейтинг спаму
-    # Примітка: цей сервіс буде оновлено для триярусної логіки пізніше
+    # --- ОСНОВНА ЗМІНА: ПЕРЕДАЄМО chat.id В СЕРВІС ---
     spam_score, triggered_words = calculate_spam_score(update.message.text, chat.id)
 
-    # 5. Перевіряємо, чи перевищено поріг спаму для цієї групи
+    if triggered_words and "whitelist" in triggered_words[0]:
+        logging.info(
+            f"Повідомлення від {user.full_name} в чаті {chat.title} пропущено через білий список: {triggered_words[0]}")
+        return
+
     if spam_score >= settings['spam_threshold']:
         logging.info(f"Виявлено спам від {user.full_name} ({user.id}) з рахунком {spam_score} в чаті {chat.title}")
 
@@ -47,12 +49,14 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logging.warning(f"Не вдалося видалити повідомлення {update.message.id} в чаті {chat.id}: {e}")
 
+        log_action(chat.id, user.id, 'spam_detected', f'Score: {spam_score}')
+        increment_daily_stat(chat.id, 'messages_deleted')
+
         warnings_count = add_warning(user.id, chat.id)
         lang = user.language_code
         action_taken_log = ""
         warning_text = ""
 
-        # 6. Застосовуємо систему покарань
         try:
             if warnings_count == 1:
                 mute_duration = datetime.now() + timedelta(days=1)
@@ -63,6 +67,8 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 warning_text = get_text(lang, "spam_warning_1", user_mention=user.mention_html())
                 action_taken_log = "Мут на 1 день"
+                increment_daily_stat(chat.id, 'warnings_given')
+                log_action(chat.id, user.id, 'warning_given', f'Warning #1')
             elif warnings_count == 2:
                 mute_duration = datetime.now() + timedelta(days=7)
                 await context.bot.restrict_chat_member(
@@ -72,12 +78,16 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 warning_text = get_text(lang, "spam_warning_2", user_mention=user.mention_html())
                 action_taken_log = "Мут на 7 днів"
+                increment_daily_stat(chat.id, 'warnings_given')
+                log_action(chat.id, user.id, 'warning_given', f'Warning #2')
             else:
                 await context.bot.ban_chat_member(chat_id=chat.id, user_id=user.id)
                 warning_text = get_text(lang, "spam_warning_3", user_mention=user.mention_html())
                 action_taken_log = "Бан"
+                increment_daily_stat(chat.id, 'bans_given')
+                increment_daily_stat(chat.id, 'warnings_given')
+                log_action(chat.id, user.id, 'user_banned')
 
-            # Надсилаємо тимчасове попередження в чат
             warning_msg = await context.bot.send_message(
                 chat_id=chat.id, text=warning_text, parse_mode=ParseMode.HTML, disable_notification=True
             )
@@ -88,7 +98,6 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logging.error(f"Помилка при застосуванні покарання для {user.id} в чаті {chat.id}: {e}")
 
-        # 7. Надсилаємо детальний лог власнику групи (або власнику бота, якщо власника не знайдено)
         log_recipient_id = group_admin_id or ADMIN_ID
         try:
             log_keyboard = InlineKeyboardMarkup([[

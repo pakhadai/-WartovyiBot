@@ -55,6 +55,10 @@
                             <label for="spamfilter-toggle" data-translate="spamfilter_toggle_label">Спам-фільтр</label>
                             <label class="switch"><input type="checkbox" id="spamfilter-toggle"><span class="slider round"></span></label>
                         </div>
+                        <div class="setting-item" id="spam-threshold-container">
+                            <label for="spam-threshold" data-translate="spam_threshold_label">Поріг спаму</label>
+                            <input type="number" id="spam-threshold" min="5" max="50" step="5" style="width: 60px; padding: 5px; border: 1px solid var(--tg-hint); border-radius: 4px;">
+                        </div>
                     </div>
                 </section>
                 <section class="card">
@@ -73,10 +77,129 @@
             </div>
         </div>
 
-        <div id="stats-page" class="page">
-            <header class="page-header"><h1 data-translate="stats_title">Статистика</h1></header>
-            <div class="card"><p data-translate="stats_stub_text">📊 Цей розділ наразі в розробці.</p></div>
+            <!-- Замініть блок stats-page в webapp/index.html на цей код -->
+    <div id="stats-page" class="page">
+        <header class="page-header">
+            <h1 data-translate="stats_title">Статистика</h1>
+            <p class="subtitle" data-translate="stats_subtitle">Аналітика активності ваших груп</p>
+        </header>
+    
+        <!-- Селектор групи -->
+        <div class="card">
+            <h2 data-translate="select_chat_for_stats">Виберіть групу для статистики</h2>
+            <select id="stats-chat-selector" class="chat-selector">
+                <option value="" data-translate="loading_chats">Завантаження...</option>
+            </select>
+        
+            <!-- Період статистики -->
+            <div class="period-selector">
+                <button class="period-btn active" data-days="7">7 днів</button>
+                <button class="period-btn" data-days="30">30 днів</button>
+                <button class="period-btn" data-days="90">90 днів</button>
+            </div>
         </div>
+    
+        <!-- Контейнер статистики -->
+        <div id="stats-container" class="hidden">
+        
+            <!-- Основні метрики -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">📊</div>
+                    <div class="stat-value" id="total-messages">0</div>
+                    <div class="stat-label">Повідомлень</div>
+                    <div class="stat-change positive">+0%</div>
+                </div>
+            
+                <div class="stat-card">
+                    <div class="stat-icon">🛡️</div>
+                    <div class="stat-value" id="spam-blocked">0</div>
+                    <div class="stat-label">Заблоковано спаму</div>
+                    <div class="stat-change negative">0%</div>
+                </div>
+            
+                <div class="stat-card">
+                    <div class="stat-icon">👥</div>
+                    <div class="stat-value" id="user-growth">0</div>
+                    <div class="stat-label">Приріст користувачів</div>
+                    <div class="stat-change positive">+0</div>
+                </div>
+            
+                <div class="stat-card">
+                    <div class="stat-icon">✅</div>
+                    <div class="stat-value" id="captcha-success">0%</div>
+                    <div class="stat-label">Успішність CAPTCHA</div>
+                    <div class="stat-change">0/0</div>
+                </div>
+            </div>
+        
+            <!-- Графік активності -->
+            <div class="card chart-card">
+                <h2>📈 Активність за період</h2>
+                <canvas id="activity-chart"></canvas>
+            </div>
+        
+            <!-- Два колонки -->
+            <div class="stats-columns">
+                <!-- Топ порушників -->
+                <div class="card">
+                    <h2>⚠️ Топ порушників</h2>
+                    <div id="top-violators" class="violators-list">
+                        <div class="loading-placeholder">Завантаження...</div>
+                    </div>
+                </div>
+            
+                <!-- Активність по годинах -->
+                <div class="card">
+                    <h2>🕐 Активність по годинах</h2>
+                    <canvas id="hourly-chart"></canvas>
+                </div>
+            </div>
+        
+            <!-- Поточний стан -->
+            <div class="card status-card">
+                <h2>🔧 Поточні налаштування та стан</h2>
+                <div class="status-grid">
+                    <div class="status-item">
+                        <span class="status-label">CAPTCHA:</span>
+                        <span class="status-value" id="captcha-status">-</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Спам-фільтр:</span>
+                        <span class="status-value" id="spam-filter-status">-</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Поріг спаму:</span>
+                        <span class="status-value" id="spam-threshold-status">-</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Користувачів з попередженнями:</span>
+                        <span class="status-value" id="warned-users">-</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Слів у чорному списку:</span>
+                        <span class="status-value" id="blocklist-size">-</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Слів у білому списку:</span>
+                        <span class="status-value" id="whitelist-size">-</span>
+                    </div>
+                </div>
+            </div>
+        
+            <!-- Кнопка експорту -->
+            <div class="card export-card">
+                <button class="export-btn" id="export-stats-btn">
+                    📥 Експортувати статистику (CSV)
+                </button>
+            </div>
+        </div>
+    
+        <!-- Заглушка коли немає даних -->
+        <div id="no-stats-data" class="card hidden">
+            <p>📊 Немає даних для відображення. Статистика з'явиться після активності в групі.</p>
+        </div>
+    </div>
         <div id="premium-page" class="page">
             <header class="page-header"><h1 data-translate="premium_title">Преміум</h1></header>
             <div class="card"><p data-translate="premium_stub_text">💎 Незабаром тут з'являться преміум-функції.</p></div>

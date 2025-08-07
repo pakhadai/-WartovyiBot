@@ -3,6 +3,7 @@ from telegram import Update, ChatPermissions
 from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
 from bot.infrastructure.localization import get_text
+from bot.infrastructure.database import log_action, increment_daily_stat
 
 MAX_ATTEMPTS = 2
 
@@ -35,6 +36,9 @@ async def captcha_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for job in context.job_queue.get_jobs_by_name(f"captcha_timeout_{user_id_for_captcha}_{query.message.chat.id}"):
             job.schedule_removal()
 
+            log_action(query.message.chat.id, user_id_for_captcha, 'captcha_passed')
+            increment_daily_stat(query.message.chat.id, 'captcha_passed')
+
         try:
             await context.bot.restrict_chat_member(
                 chat_id=query.message.chat.id,
@@ -65,6 +69,10 @@ async def captcha_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for job in context.job_queue.get_jobs_by_name(
                     f"captcha_timeout_{user_id_for_captcha}_{query.message.chat.id}"):
                 job.schedule_removal()
+
+                log_action(query.message.chat.id, user_id_for_captcha, 'captcha_failed')
+                increment_daily_stat(query.message.chat.id, 'captcha_failed')
+
             try:
                 await query.edit_message_text(get_text(lang, "captcha_fail_kick"))
                 await context.bot.ban_chat_member(chat_id=query.message.chat.id, user_id=user_id_for_captcha,

@@ -22,7 +22,8 @@ def calculate_spam_score(message_text: str, chat_id: int) -> (int, list):
 
     # 2. Перевірка на білий список. Якщо слово у білому списку, аналіз по ньому припиняється.
     for whitelisted_word in whitelist:
-        if whitelisted_word in text_lower:
+        if whitelisted_word.lower() in text_lower:
+            # Повертаємо 0 балів, вказуючи, що спрацював білий список
             return 0, [f"'{whitelisted_word}' (whitelist)"]
 
     # 3. Формуємо фінальний список спам-слів згідно з налаштуваннями групи
@@ -36,7 +37,7 @@ def calculate_spam_score(message_text: str, chat_id: int) -> (int, list):
 
     # 4. Проходимо по фінальному списку тригерів
     for trigger, score in final_triggers.items():
-        if trigger in text_lower:
+        if trigger.lower() in text_lower:
             spam_score += score
             triggered_words.append(f"'{trigger}' ({score})")
 

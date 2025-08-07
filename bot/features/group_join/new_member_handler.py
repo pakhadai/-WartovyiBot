@@ -8,7 +8,7 @@ from bot.infrastructure.database import get_group_settings
 from bot.infrastructure.localization import get_text
 from .captcha_service import create_captcha_keyboard
 from .captcha_timeout import captcha_timeout
-
+from bot.infrastructure.database import log_action, increment_daily_stat
 
 async def new_member_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обробляє вхід нових користувачів, враховуючи налаштування групи."""
@@ -32,6 +32,8 @@ async def new_member_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     user = new_member.user
+    log_action(chat.id, user.id, 'user_joined')
+    increment_daily_stat(chat.id, 'users_joined')
     lang = user.language_code or 'en'
 
     if user.is_bot:

@@ -290,3 +290,232 @@ input:checked + .slider:before { transform: translateX(22px); }
 .toast.error {
     background-color: var(--danger);
 }
+/* Додайте ці стилі в кінець файлу webapp/css/style.css */
+
+/* Стилі для статистики */
+.period-selector {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+    justify-content: center;
+}
+
+.period-btn {
+    padding: 8px 16px;
+    border: 1px solid var(--tg-hint);
+    border-radius: 20px;
+    background: var(--tg-bg);
+    color: var(--tg-text);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.period-btn:hover {
+    background: var(--tg-secondary-bg);
+}
+
+.period-btn.active {
+    background: var(--tg-link);
+    color: var(--tg-button-text);
+    border-color: var(--tg-link);
+}
+
+/* Сітка статистичних карток */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.stat-card {
+    background: var(--tg-secondary-bg);
+    border-radius: 16px;
+    padding: 20px;
+    text-align: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+}
+
+.stat-icon {
+    font-size: 32px;
+    margin-bottom: 10px;
+}
+
+.stat-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--tg-text);
+    margin-bottom: 5px;
+}
+
+.stat-label {
+    font-size: 13px;
+    color: var(--tg-hint);
+    margin-bottom: 8px;
+}
+
+.stat-change {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 12px;
+    display: inline-block;
+}
+
+.stat-change.positive {
+    background: rgba(46, 204, 113, 0.1);
+    color: #2ecc71;
+}
+
+.stat-change.negative {
+    background: rgba(231, 76, 60, 0.1);
+    color: #e74c3c;
+}
+
+/* Графіки */
+.chart-card {
+    padding: 25px;
+}
+
+.chart-card h2 {
+    margin-bottom: 20px;
+}
+
+canvas {
+    max-width: 100%;
+    height: auto !important;
+}
+
+/* Дві колонки */
+.stats-columns {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+/* Список порушників */
+.violators-list {
+    padding: 10px 0;
+}
+
+.violator-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    margin-bottom: 8px;
+    background: var(--tg-bg);
+    border-radius: 8px;
+    transition: background 0.2s ease;
+}
+
+.violator-item:hover {
+    background: rgba(0,0,0,0.05);
+}
+
+.violator-name {
+    font-weight: 500;
+    color: var(--tg-text);
+}
+
+.violator-count {
+    background: rgba(231, 76, 60, 0.1);
+    color: #e74c3c;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+/* Статус групи */
+.status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    padding: 15px 0;
+}
+
+.status-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px;
+    background: var(--tg-bg);
+    border-radius: 8px;
+}
+
+.status-label {
+    color: var(--tg-hint);
+    font-size: 14px;
+}
+
+.status-value {
+    font-weight: 600;
+    color: var(--tg-text);
+}
+
+.status-value.enabled {
+    color: #2ecc71;
+}
+
+.status-value.disabled {
+    color: #e74c3c;
+}
+
+/* Кнопка експорту */
+.export-card {
+    text-align: center;
+}
+
+.export-btn {
+    background: linear-gradient(45deg, var(--tg-link), var(--tg-button));
+    color: var(--tg-button-text);
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.export-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0,122,255,0.3);
+}
+
+.export-btn:active {
+    transform: translateY(0);
+}
+
+/* Плейсхолдер завантаження */
+.loading-placeholder {
+    text-align: center;
+    color: var(--tg-hint);
+    padding: 20px;
+    font-style: italic;
+}
+
+/* Анімація появи */
+#stats-container.show {
+    animation: fadeIn 0.4s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

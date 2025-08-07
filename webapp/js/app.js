@@ -111,6 +111,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('spamfilter-toggle').checked = settings.spam_filter_enabled;
             document.getElementById('use-global-list-toggle').checked = settings.use_global_list;
             document.getElementById('use-custom-list-toggle').checked = settings.use_custom_list;
+            document.getElementById('spam-threshold').value = settings.spam_threshold;
         } catch (error) {
             tg.showAlert(error.message);
         } finally {
@@ -148,9 +149,783 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('spamfilter-toggle').addEventListener('change', (e) => handleSettingUpdate('spam_filter_enabled', e.target.checked));
     document.getElementById('use-global-list-toggle').addEventListener('change', (e) => handleSettingUpdate('use_global_list', e.target.checked));
     document.getElementById('use-custom-list-toggle').addEventListener('change', (e) => handleSettingUpdate('use_custom_list', e.target.checked));
-
+    document.getElementById('spam-threshold').addEventListener('change', (e) => {
+    const value = parseInt(e.target.value);
+    if (value >= 5 && value <= 50) {
+        handleSettingUpdate('spam_threshold', value);
+    }
+});
     // 8. Ініціалізація
     loadTranslations().then(() => {
         showPage('home-page');
     });
+
+    window.statsModule = {
+    currentChatId: null,
+    currentPeriod: 7,
+    charts: {},
+    chatsLoaded: false,
+
+    init() {
+        console.log('Initializing stats module...');
+
+        // Ініціалізація обробників подій для статистики
+        const statsChatSelector = document.getElementById('stats-chat-selector');
+        if (statsChatSelector) {
+            statsChatSelector.addEventListener('change', (e) => {
+                this.currentChatId = e.target.value;
+                if (this.currentChatId) {
+                    this.loadStats();
+                } else {
+                    document.getElementById('stats-container').classList.add('hidden');
+                }
+            });
+        }
+
+        // Обробники кнопок періоду
+        document.querySelectorAll('.period-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                this.currentPeriod = parseInt(e.target.dataset.days);
+                if (this.currentChatId) {
+                    this.loadStats();
+                }
+            });
+        });
+
+        // Обробник експорту
+        const exportBtn = document.getElementById('export-stats-btn');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', () => this.exportStats());
+        }
+    },
+
+    async loadChats() {
+        console.log('Loading chats for stats...');
+        const selector = document.getElementById('stats-chat-selector');
+
+        // Використовуємо глобальну функцію t() для перекладів
+        selector.innerHTML = `<option value="">${typeof t !== 'undefined' ? t('loading_chats') : 'Loading...'}</option>`;
+
+        try {
+            // Використовуємо глобальну змінну commonHeaders
+            const response = await fetch('/api/my-chats', {
+                headers: typeof commonHeaders !== 'undefined' ? commonHeaders : {'Content-Type': 'application/json'}
+            });
+
+            if (!response.ok) throw new Error('Failed to load chats');
+
+            const chats = await response.json();
+            this.chatsLoaded = true;
+
+            selector.innerHTML = `<option value="">-- ${typeof t !== 'undefined' ? t('select_chat_placeholder') : 'Select chat'} --</option>`;
+
+            chats.forEach(chat => {
+                const option = document.createElement('option');
+                option.value = chat.id;
+                option.textContent = chat.name;
+                selector.appendChild(option);
+            });
+        } catch (error) {
+            console.error('Error loading chats for stats:', error);
+            selector.innerHTML = `<option value="">Error loading chats</option>`;
+        }
+    },
+
+    async loadStats() {
+        console.log('Loading stats for chat:', this.currentChatId);
+        const container = document.getElementById('stats-container');
+        const noDataContainer = document.getElementById('no-stats-data');
+
+        container.classList.remove('hidden');
+        noDataContainer.classList.add('hidden');
+
+        try {
+            const response = await fetch(
+                `/api/stats/${this.currentChatId}?days=${this.currentPeriod}`,
+                { headers: typeof commonHeaders !== 'undefined' ? commonHeaders : {'Content-Type': 'application/json'} }
+            );
+
+            if (!response.ok) throw new Error('Failed to load stats');
+
+            const data = await response.json();
+            console.log('Stats data received:', data);
+            this.renderStats(data);
+
+        } catch (error) {
+            console.error('Error loading stats:', error);
+            container.classList.add('hidden');
+            noDataContainer.classList.remove('hidden');
+        }
+    },
+
+    renderStats(data) {
+        const { historical, current } = data;
+        const totals = historical.totals || {};
+
+        // Оновлюємо основні метрики
+        document.getElementById('total-messages').textContent =
+            this.formatNumber(totals.total_messages || 0);
+
+        document.getElementById('spam-blocked').textContent =
+            this.formatNumber(totals.total_deleted || 0);
+
+        const userGrowth = (totals.total_joined || 0) - (totals.total_left || 0);
+        document.getElementById('user-growth').textContent =
+            (userGrowth >= 0 ? '+' : '') + userGrowth;
+
+        const captchaTotal = (totals.total_captcha_passed || 0) + (totals.total_captcha_failed || 0);
+        const captchaRate = captchaTotal > 0
+            ? Math.round((totals.total_captcha_passed / captchaTotal) * 100)
+            : 0;
+        document.getElementById('captcha-success').textContent = captchaRate + '%';
+
+        // Оновлюємо зміни
+        this.updateChangeIndicators(historical);
+
+        // Малюємо графіки
+        this.drawActivityChart(historical.daily || []);
+        this.drawHourlyChart(historical.hourly_activity || []);
+
+        // Топ порушників
+        this.renderViolators(historical.top_violators || []);
+
+        // Поточний стан
+        this.renderCurrentStatus(current);
+    },
+
+    updateChangeIndicators(historical) {
+        const changes = document.querySelectorAll('.stat-change');
+        if (changes[0]) changes[0].textContent = '+12%'; // Приклад
+        if (changes[1]) changes[1].textContent = '-8%';
+        if (changes[2]) changes[2].textContent = '+' + ((historical.totals?.total_joined || 0) - (historical.totals?.total_left || 0));
+        if (changes[3]) changes[3].textContent = `${historical.totals?.total_captcha_passed || 0}/${(historical.totals?.total_captcha_passed || 0) + (historical.totals?.total_captcha_failed || 0)}`;
+    },
+
+    drawActivityChart(dailyData) {
+        const canvas = document.getElementById('activity-chart');
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
+
+        if (this.charts.activity) {
+            this.charts.activity.destroy?.();
+        }
+
+        const labels = dailyData.map(d => this.formatDate(d.date));
+        const messagesData = dailyData.map(d => d.messages_total || 0);
+        const deletedData = dailyData.map(d => d.messages_deleted || 0);
+
+        this.drawSimpleLineChart(ctx, labels, [
+            { data: messagesData, color: '#007aff', label: 'Повідомлення' },
+            { data: deletedData, color: '#e74c3c', label: 'Видалено' }
+        ]);
+    },
+
+    drawHourlyChart(hourlyData) {
+        const canvas = document.getElementById('hourly-chart');
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
+
+        const hours = Array.from({length: 24}, (_, i) => i);
+        const data = new Array(24).fill(0);
+
+        hourlyData.forEach(item => {
+            const hour = parseInt(item.hour);
+            data[hour] = item.count;
+        });
+
+        this.drawSimpleBarChart(ctx, hours.map(h => `${h}:00`), data, '#007aff');
+    },
+
+    drawSimpleLineChart(ctx, labels, datasets) {
+        const canvas = ctx.canvas;
+        const width = canvas.width = canvas.offsetWidth * 2;
+        const height = canvas.height = 300;
+        const padding = 40;
+
+        ctx.clearRect(0, 0, width, height);
+        ctx.scale(2, 2);
+
+        let maxValue = 0;
+        datasets.forEach(dataset => {
+            maxValue = Math.max(maxValue, ...dataset.data);
+        });
+        maxValue = maxValue || 1;
+
+        const chartWidth = width/2 - padding * 2;
+        const chartHeight = height/2 - padding * 2;
+        const stepX = chartWidth / (labels.length - 1 || 1);
+
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.lineWidth = 0.5;
+        for (let i = 0; i <= 5; i++) {
+            const y = padding + (chartHeight * i / 5);
+            ctx.beginPath();
+            ctx.moveTo(padding, y);
+            ctx.lineTo(padding + chartWidth, y);
+            ctx.stroke();
+        }
+
+        datasets.forEach(dataset => {
+            ctx.strokeStyle = dataset.color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+
+            dataset.data.forEach((value, index) => {
+                const x = padding + index * stepX;
+                const y = padding + chartHeight - (value / maxValue * chartHeight);
+
+                if (index === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            });
+
+            ctx.stroke();
+
+            ctx.fillStyle = dataset.color;
+            dataset.data.forEach((value, index) => {
+                const x = padding + index * stepX;
+                const y = padding + chartHeight - (value / maxValue * chartHeight);
+                ctx.beginPath();
+                ctx.arc(x, y, 3, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        });
+
+        ctx.fillStyle = '#666';
+        ctx.font = '10px Inter';
+        labels.forEach((label, index) => {
+            if (index % Math.ceil(labels.length / 7) === 0) {
+                const x = padding + index * stepX;
+                ctx.fillText(label, x - 15, height/2 - 10);
+            }
+        });
+    },
+
+    drawSimpleBarChart(ctx, labels, data, color) {
+        const canvas = ctx.canvas;
+        const width = canvas.width = canvas.offsetWidth * 2;
+        const height = canvas.height = 200;
+        const padding = 20;
+
+        ctx.clearRect(0, 0, width, height);
+        ctx.scale(2, 2);
+
+        const maxValue = Math.max(...data) || 1;
+        const barWidth = (width/2 - padding * 2) / labels.length;
+        const chartHeight = height/2 - padding * 2;
+
+        ctx.fillStyle = color;
+
+        data.forEach((value, index) => {
+            const x = padding + index * barWidth;
+            const barHeight = (value / maxValue) * chartHeight;
+            const y = height/2 - padding - barHeight;
+
+            ctx.globalAlpha = 0.8;
+            ctx.fillRect(x + barWidth * 0.1, y, barWidth * 0.8, barHeight);
+        });
+
+        ctx.globalAlpha = 1;
+    },
+
+    renderViolators(violators) {
+        const container = document.getElementById('top-violators');
+
+        if (violators.length === 0) {
+            container.innerHTML = `<div class="loading-placeholder">${typeof t !== 'undefined' ? t('no_violators') : 'No violators 🎉'}</div>`;
+            return;
+        }
+
+        container.innerHTML = violators.map(v => `
+            <div class="violator-item">
+                <span class="violator-name">ID: ${v.user_id}</span>
+                <span class="violator-count">${v.violation_count} ${typeof t !== 'undefined' ? t('violations_count').replace('{count}', v.violation_count) : 'violations'}</span>
+            </div>
+        `).join('');
+    },
+
+    renderCurrentStatus(current) {
+        const settings = current.settings || {};
+        const warnings = current.warnings || {};
+
+        const captchaStatus = document.getElementById('captcha-status');
+        const statusEnabled = typeof t !== 'undefined' ? t('status_enabled') : '✅ Enabled';
+        const statusDisabled = typeof t !== 'undefined' ? t('status_disabled') : '❌ Disabled';
+
+        captchaStatus.textContent = settings.captcha_enabled ? statusEnabled : statusDisabled;
+        captchaStatus.className = settings.captcha_enabled ? 'status-value enabled' : 'status-value disabled';
+
+        const spamStatus = document.getElementById('spam-filter-status');
+        spamStatus.textContent = settings.spam_filter_enabled ? statusEnabled : statusDisabled;
+        spamStatus.className = settings.spam_filter_enabled ? 'status-value enabled' : 'status-value disabled';
+
+        document.getElementById('spam-threshold-status').textContent = settings.spam_threshold || '-';
+
+        const warnedText = typeof t !== 'undefined' ?
+            t('warned_users_format').replace('{users}', warnings.users_with_warnings || 0).replace('{warnings}', warnings.total_warnings || 0) :
+            `${warnings.users_with_warnings || 0} (${warnings.total_warnings || 0} warnings)`;
+        document.getElementById('warned-users').textContent = warnedText;
+
+        document.getElementById('blocklist-size').textContent = current.blocklist_count || 0;
+        document.getElementById('whitelist-size').textContent = current.whitelist_count || 0;
+    },
+
+    async exportStats() {
+        if (!this.currentChatId) {
+            if (typeof tg !== 'undefined') {
+                tg.showAlert('Спочатку виберіть групу');
+            } else {
+                alert('Спочатку виберіть групу');
+            }
+            return;
+        }
+
+        try {
+            const response = await fetch(
+                `/api/stats/${this.currentChatId}/export?format=csv`,
+                { headers: typeof commonHeaders !== 'undefined' ? commonHeaders : {'Content-Type': 'application/json'} }
+            );
+
+            if (!response.ok) throw new Error('Failed to export');
+
+            const data = await response.json();
+
+            const blob = new Blob([data.csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `stats_${this.currentChatId}_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+
+            if (typeof showToast !== 'undefined') {
+                showToast('✅ Статистику експортовано');
+            }
+
+        } catch (error) {
+            console.error('Export error:', error);
+            if (typeof tg !== 'undefined') {
+                tg.showAlert('Помилка експорту даних');
+            }
+        }
+    },
+
+    formatNumber(num) {
+        if (num >= 1000000) {
+            return (num / 1000000).toFixed(1) + 'M';
+        } else if (num >= 1000) {
+            return (num / 1000).toFixed(1) + 'K';
+        }
+        return num.toString();
+    },
+
+    formatDate(dateStr) {
+        const date = new Date(dateStr);
+        return `${date.getDate()}.${date.getMonth() + 1}`;
+    }
+};
+
+// Ініціалізуємо модуль статистики після завантаження сторінки
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+        window.statsModule.init();
+    }, 500);
 });
+});
+
+// Додайте цей код в webapp/js/app.js після існуючого коду
+
+// === МОДУЛЬ СТАТИСТИКИ ===
+let statsModule = {
+    currentChatId: null,
+    currentPeriod: 7,
+    charts: {},
+
+    init() {
+        // Ініціалізація обробників подій для статистики
+        const statsChatSelector = document.getElementById('stats-chat-selector');
+        if (statsChatSelector) {
+            statsChatSelector.addEventListener('change', (e) => {
+                this.currentChatId = e.target.value;
+                if (this.currentChatId) {
+                    this.loadStats();
+                } else {
+                    document.getElementById('stats-container').classList.add('hidden');
+                }
+            });
+        }
+
+        // Обробники кнопок періоду
+        document.querySelectorAll('.period-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                this.currentPeriod = parseInt(e.target.dataset.days);
+                if (this.currentChatId) {
+                    this.loadStats();
+                }
+            });
+        });
+
+        // Обробник експорту
+        const exportBtn = document.getElementById('export-stats-btn');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', () => this.exportStats());
+        }
+    },
+
+    async loadChats() {
+        const selector = document.getElementById('stats-chat-selector');
+        selector.innerHTML = `<option value="">${t('loading_chats')}</option>`;
+
+        try {
+            const response = await fetch('/api/my-chats', { headers: commonHeaders });
+            if (!response.ok) throw new Error('Failed to load chats');
+
+            const chats = await response.json();
+            selector.innerHTML = `<option value="">-- ${t('select_chat_placeholder')} --</option>`;
+
+            chats.forEach(chat => {
+                const option = document.createElement('option');
+                option.value = chat.id;
+                option.textContent = chat.name;
+                selector.appendChild(option);
+            });
+        } catch (error) {
+            console.error('Error loading chats:', error);
+            tg.showAlert('Помилка завантаження чатів');
+        }
+    },
+
+    async loadStats() {
+        const container = document.getElementById('stats-container');
+        const noDataContainer = document.getElementById('no-stats-data');
+
+        container.classList.remove('hidden');
+        noDataContainer.classList.add('hidden');
+
+        try {
+            const response = await fetch(
+                `/api/stats/${this.currentChatId}?days=${this.currentPeriod}`,
+                { headers: commonHeaders }
+            );
+
+            if (!response.ok) throw new Error('Failed to load stats');
+
+            const data = await response.json();
+            this.renderStats(data);
+
+        } catch (error) {
+            console.error('Error loading stats:', error);
+            container.classList.add('hidden');
+            noDataContainer.classList.remove('hidden');
+        }
+    },
+
+    renderStats(data) {
+        const { historical, current } = data;
+        const totals = historical.totals || {};
+
+        // Оновлюємо основні метрики
+        document.getElementById('total-messages').textContent =
+            this.formatNumber(totals.total_messages || 0);
+
+        document.getElementById('spam-blocked').textContent =
+            this.formatNumber(totals.total_deleted || 0);
+
+        const userGrowth = (totals.total_joined || 0) - (totals.total_left || 0);
+        document.getElementById('user-growth').textContent =
+            (userGrowth >= 0 ? '+' : '') + userGrowth;
+
+        const captchaTotal = (totals.total_captcha_passed || 0) + (totals.total_captcha_failed || 0);
+        const captchaRate = captchaTotal > 0
+            ? Math.round((totals.total_captcha_passed / captchaTotal) * 100)
+            : 0;
+        document.getElementById('captcha-success').textContent = captchaRate + '%';
+
+        // Оновлюємо зміни
+        this.updateChangeIndicators(historical);
+
+        // Малюємо графіки
+        this.drawActivityChart(historical.daily || []);
+        this.drawHourlyChart(historical.hourly_activity || []);
+
+        // Топ порушників
+        this.renderViolators(historical.top_violators || []);
+
+        // Поточний стан
+        this.renderCurrentStatus(current);
+    },
+
+    updateChangeIndicators(historical) {
+        // Тут можна додати логіку порівняння з попереднім періодом
+        const changes = document.querySelectorAll('.stat-change');
+        changes[0].textContent = '+12%'; // Приклад
+        changes[1].textContent = '-8%';
+        changes[2].textContent = '+' + ((historical.totals?.total_joined || 0) - (historical.totals?.total_left || 0));
+        changes[3].textContent = `${historical.totals?.total_captcha_passed || 0}/${(historical.totals?.total_captcha_passed || 0) + (historical.totals?.total_captcha_failed || 0)}`;
+    },
+
+    drawActivityChart(dailyData) {
+        const canvas = document.getElementById('activity-chart');
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
+
+        // Знищуємо попередній графік якщо є
+        if (this.charts.activity) {
+            this.charts.activity.destroy();
+        }
+
+        // Підготовка даних
+        const labels = dailyData.map(d => this.formatDate(d.date));
+        const messagesData = dailyData.map(d => d.messages_total || 0);
+        const deletedData = dailyData.map(d => d.messages_deleted || 0);
+
+        // Малюємо новий графік (простий варіант без Chart.js)
+        this.drawSimpleLineChart(ctx, labels, [
+            { data: messagesData, color: '#007aff', label: 'Повідомлення' },
+            { data: deletedData, color: '#e74c3c', label: 'Видалено' }
+        ]);
+    },
+
+    drawHourlyChart(hourlyData) {
+        const canvas = document.getElementById('hourly-chart');
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
+
+        // Підготовка даних по годинах (24 години)
+        const hours = Array.from({length: 24}, (_, i) => i);
+        const data = new Array(24).fill(0);
+
+        hourlyData.forEach(item => {
+            const hour = parseInt(item.hour);
+            data[hour] = item.count;
+        });
+
+        // Малюємо барчарт
+        this.drawSimpleBarChart(ctx, hours.map(h => `${h}:00`), data, '#007aff');
+    },
+
+    drawSimpleLineChart(ctx, labels, datasets) {
+        const canvas = ctx.canvas;
+        const width = canvas.width = canvas.offsetWidth * 2;
+        const height = canvas.height = 300;
+        const padding = 40;
+
+        ctx.clearRect(0, 0, width, height);
+        ctx.scale(2, 2);
+
+        // Знаходимо максимальне значення
+        let maxValue = 0;
+        datasets.forEach(dataset => {
+            maxValue = Math.max(maxValue, ...dataset.data);
+        });
+        maxValue = maxValue || 1;
+
+        const chartWidth = width/2 - padding * 2;
+        const chartHeight = height/2 - padding * 2;
+        const stepX = chartWidth / (labels.length - 1 || 1);
+
+        // Малюємо сітку
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.lineWidth = 0.5;
+        for (let i = 0; i <= 5; i++) {
+            const y = padding + (chartHeight * i / 5);
+            ctx.beginPath();
+            ctx.moveTo(padding, y);
+            ctx.lineTo(padding + chartWidth, y);
+            ctx.stroke();
+        }
+
+        // Малюємо лінії даних
+        datasets.forEach(dataset => {
+            ctx.strokeStyle = dataset.color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+
+            dataset.data.forEach((value, index) => {
+                const x = padding + index * stepX;
+                const y = padding + chartHeight - (value / maxValue * chartHeight);
+
+                if (index === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            });
+
+            ctx.stroke();
+
+            // Малюємо точки
+            ctx.fillStyle = dataset.color;
+            dataset.data.forEach((value, index) => {
+                const x = padding + index * stepX;
+                const y = padding + chartHeight - (value / maxValue * chartHeight);
+                ctx.beginPath();
+                ctx.arc(x, y, 3, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        });
+
+        // Підписи
+        ctx.fillStyle = '#666';
+        ctx.font = '10px Inter';
+        labels.forEach((label, index) => {
+            if (index % Math.ceil(labels.length / 7) === 0) {
+                const x = padding + index * stepX;
+                ctx.fillText(label, x - 15, height/2 - 10);
+            }
+        });
+    },
+
+    drawSimpleBarChart(ctx, labels, data, color) {
+        const canvas = ctx.canvas;
+        const width = canvas.width = canvas.offsetWidth * 2;
+        const height = canvas.height = 200;
+        const padding = 20;
+
+        ctx.clearRect(0, 0, width, height);
+        ctx.scale(2, 2);
+
+        const maxValue = Math.max(...data) || 1;
+        const barWidth = (width/2 - padding * 2) / labels.length;
+        const chartHeight = height/2 - padding * 2;
+
+        ctx.fillStyle = color;
+
+        data.forEach((value, index) => {
+            const x = padding + index * barWidth;
+            const barHeight = (value / maxValue) * chartHeight;
+            const y = height/2 - padding - barHeight;
+
+            ctx.globalAlpha = 0.8;
+            ctx.fillRect(x + barWidth * 0.1, y, barWidth * 0.8, barHeight);
+        });
+
+        ctx.globalAlpha = 1;
+    },
+
+    renderViolators(violators) {
+        const container = document.getElementById('top-violators');
+
+        if (violators.length === 0) {
+            container.innerHTML = '<div class="loading-placeholder">Немає порушників 🎉</div>';
+            return;
+        }
+
+        container.innerHTML = violators.map(v => `
+            <div class="violator-item">
+                <span class="violator-name">ID: ${v.user_id}</span>
+                <span class="violator-count">${v.violation_count} порушень</span>
+            </div>
+        `).join('');
+    },
+
+    renderCurrentStatus(current) {
+        const settings = current.settings || {};
+        const warnings = current.warnings || {};
+
+        // Статус CAPTCHA
+        const captchaStatus = document.getElementById('captcha-status');
+        captchaStatus.textContent = settings.captcha_enabled ? '✅ Увімкнено' : '❌ Вимкнено';
+        captchaStatus.className = settings.captcha_enabled ? 'status-value enabled' : 'status-value disabled';
+
+        // Статус спам-фільтру
+        const spamStatus = document.getElementById('spam-filter-status');
+        spamStatus.textContent = settings.spam_filter_enabled ? '✅ Увімкнено' : '❌ Вимкнено';
+        spamStatus.className = settings.spam_filter_enabled ? 'status-value enabled' : 'status-value disabled';
+
+        // Поріг спаму
+        document.getElementById('spam-threshold-status').textContent = settings.spam_threshold || '-';
+
+        // Користувачі з попередженнями
+        document.getElementById('warned-users').textContent =
+            `${warnings.users_with_warnings || 0} (${warnings.total_warnings || 0} попереджень)`;
+
+        // Розміри списків
+        document.getElementById('blocklist-size').textContent = current.blocklist_count || 0;
+        document.getElementById('whitelist-size').textContent = current.whitelist_count || 0;
+    },
+
+    async exportStats() {
+        if (!this.currentChatId) {
+            tg.showAlert('Спочатку виберіть групу');
+            return;
+        }
+
+        try {
+            const response = await fetch(
+                `/api/stats/${this.currentChatId}/export?format=csv`,
+                { headers: commonHeaders }
+            );
+
+            if (!response.ok) throw new Error('Failed to export');
+
+            const data = await response.json();
+
+            // Створюємо файл для завантаження
+            const blob = new Blob([data.csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `stats_${this.currentChatId}_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+
+            showToast('✅ Статистику експортовано');
+
+        } catch (error) {
+            console.error('Export error:', error);
+            tg.showAlert('Помилка експорту даних');
+        }
+    },
+
+    formatNumber(num) {
+        if (num >= 1000000) {
+            return (num / 1000000).toFixed(1) + 'M';
+        } else if (num >= 1000) {
+            return (num / 1000).toFixed(1) + 'K';
+        }
+        return num.toString();
+    },
+
+    formatDate(dateStr) {
+        const date = new Date(dateStr);
+        return `${date.getDate()}.${date.getMonth() + 1}`;
+    }
+};
+
+// Додаємо обробник для вкладки статистики
+// Знайдіть рядок де обробляються навігаційні кнопки і додайте:
+navButtons.forEach(button => button.addEventListener('click', () => {
+    const pageId = button.dataset.page;
+    showPage(pageId);
+
+    // Завантажуємо чати для статистики при першому відкритті
+    if (pageId === 'stats-page' && window.statsModule && !window.statsModule.chatsLoaded) {
+        window.statsModule.loadChats();
+    }
+}));
+
+    showPage(pageId);
+
+    // Завантажуємо чати для статистики при першому відкритті
+    if (pageId === 'stats-page' && !statsModule.currentChatId) {
+        statsModule.loadChats();
+    }
+}));
+
+// Ініціалізуємо модуль статистики
+statsModule.init();

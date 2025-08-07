@@ -10,7 +10,9 @@ from bot.infrastructure.database import (
     get_global_settings, set_global_setting,
     get_group_settings, set_group_setting,
     get_spam_triggers, add_spam_trigger, delete_spam_trigger,
-    is_group_admin, get_user_chats
+    is_group_admin, get_user_chats,
+    get_group_blocklist, add_group_spam_trigger, delete_group_spam_trigger,
+    get_group_whitelist, add_group_whitelist_word, delete_group_whitelist_word
 )
 from bot.config import ADMIN_ID
 
@@ -127,3 +129,92 @@ async def delete_existing_spam_word(item: SpamTriggerDelete = Body(...), x_user_
     await verify_global_admin(x_user_data)
     delete_spam_trigger(item.trigger)
     return {"status": "success"}
+
+
+@router.get("/api/spam-words/{chat_id}")
+async def get_group_spam_words(chat_id: int, x_user_data: str = Header(None)):
+    """Повертає локальний список спам-слів для групи."""
+    await verify_user_access(x_user_data, chat_id)
+    from bot.infrastructure.database import get_group_blocklist
+    return get_group_blocklist(chat_id)
+
+@router.post("/api/spam-words/{chat_id}")
+async def add_group_spam_word(chat_id: int, item: SpamTrigger, x_user_data: str = Header(None)):
+    """Додає слово до локального списку групи."""
+    await verify_user_access(x_user_data, chat_id)
+    from bot.infrastructure.database import add_group_spam_trigger
+    add_group_spam_trigger(chat_id, item.trigger, item.score)
+    return {"status": "success"}
+
+@router.delete("/api/spam-words/{chat_id}")
+async def delete_group_spam_word(chat_id: int, item: SpamTriggerDelete = Body(...), x_user_data: str = Header(None)):
+    """Видаляє слово з локального списку групи."""
+    await verify_user_access(x_user_data, chat_id)
+    from bot.infrastructure.database import delete_group_spam_trigger
+    delete_group_spam_trigger(chat_id, item.trigger)
+    return {"status": "success"}
+
+@router.get("/api/whitelist/{chat_id}")
+async def get_group_whitelist(chat_id: int, x_user_data: str = Header(None)):
+    """Повертає білий список для групи."""
+    await verify_user_access(x_user_data, chat_id)
+    from bot.infrastructure.database import get_group_whitelist
+    return get_group_whitelist(chat_id)
+
+@router.post("/api/whitelist/{chat_id}")
+async def add_whitelist_word(chat_id: int, word: str = Body(..., embed=True), x_user_data: str = Header(None)):
+    """Додає слово до білого списку групи."""
+    await verify_user_access(x_user_data, chat_id)
+    from bot.infrastructure.database import add_group_whitelist_word
+    add_group_whitelist_word(chat_id, word)
+    return {"status": "success"}
+
+
+@router.get("/api/stats/{chat_id}")
+async def get_chat_statistics(chat_id: int, days: int = 30, x_user_data: str = Header(None)):
+    """Отримує статистику для конкретної групи."""
+    await verify_user_access(x_user_data, chat_id)
+    from bot.infrastructure.database import get_group_stats, get_group_current_stats
+
+    historical_stats = get_group_stats(chat_id, days)
+    current_stats = get_group_current_stats(chat_id)
+
+    return {
+        'historical': historical_stats,
+        'current': current_stats
+    }
+
+
+@router.get("/api/stats/{chat_id}/export")
+async def export_chat_statistics(chat_id: int, format: str = "json", x_user_data: str = Header(None)):
+    """Експортує статистику групи в різних форматах."""
+    await verify_user_access(x_user_data, chat_id)
+    from bot.infrastructure.database import get_group_stats
+    import csv
+    import io
+
+    stats = get_group_stats(chat_id, 90)  # 3 місяці даних
+
+    if format == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        # Записуємо заголовки
+        writer.writerow(['Date', 'Messages', 'Deleted', 'Users Joined', 'Users Left'])
+
+        # Записуємо дані
+        for day in stats['daily']:
+            writer.writerow([
+                day['date'],
+                day['messages_total'],
+                day['messages_deleted'],
+                day['users_joined'],
+                day['users_left']
+            ])
+
+        return JSONResponse(
+            content={'csv': output.getvalue()},
+            headers={'Content-Type': 'text/csv'}
+        )
+
+    return stats
