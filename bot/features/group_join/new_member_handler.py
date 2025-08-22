@@ -38,7 +38,7 @@ async def new_member_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     lang = user.language_code or 'en' # Залишаємо надійну логіку з запасним варіантом
     # --- КІНЕЦЬ ЗМІНИ ---
 
-    log_action(chat.id, user.id, 'user_joined')
+    log_action(chat.id, user.id, user.full_name, 'user_joined')
     increment_daily_stat(chat.id, 'users_joined')
 
     try:

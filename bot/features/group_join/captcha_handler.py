@@ -36,7 +36,7 @@ async def captcha_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for job in context.job_queue.get_jobs_by_name(f"captcha_timeout_{user_id_for_captcha}_{query.message.chat.id}"):
             job.schedule_removal()
 
-        log_action(query.message.chat.id, user_id_for_captcha, 'captcha_passed')
+        log_action(query.message.chat.id, user_id_for_captcha, user_who_clicked.full_name, 'captcha_passed')
         increment_daily_stat(query.message.chat.id, 'captcha_passed')
 
         try:
@@ -79,7 +79,7 @@ async def captcha_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"captcha_timeout_{user_id_for_captcha}_{query.message.chat.id}"):
                 job.schedule_removal()
 
-            log_action(query.message.chat.id, user_id_for_captcha, 'captcha_failed')
+            log_action(query.message.chat.id, user_id_for_captcha, user_who_clicked.full_name, 'captcha_failed')
             increment_daily_stat(query.message.chat.id, 'captcha_failed')
 
             try:

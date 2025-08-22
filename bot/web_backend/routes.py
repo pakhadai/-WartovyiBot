@@ -119,7 +119,7 @@ async def get_chat_settings(chat_id: int, x_user_data: str = Header(None)):
 async def update_chat_setting(chat_id: int, update: SettingUpdate, x_user_data: str = Header(None)):
     """Оновлює налаштування для конкретної групи."""
     await verify_user_access(x_user_data, chat_id)
-    allowed_keys = ["captcha_enabled", "spam_filter_enabled", "spam_threshold", "use_global_list", "use_custom_list"]
+    allowed_keys = ["captcha_enabled", "spam_filter_enabled", "spam_threshold", "use_global_list", "use_custom_list", "antiflood_enabled", "antiflood_sensitivity"]
     if update.key not in allowed_keys:
         raise HTTPException(status_code=400, detail="Invalid group setting key")
     set_group_setting(chat_id, update.key, update.value)
@@ -234,3 +234,32 @@ async def export_chat_statistics(chat_id: int, format: str = "json", x_user_data
         )
 
     return stats
+
+
+class PunishmentRule(BaseModel):
+    level: int
+    action: str
+    duration: int
+
+
+@router.get("/api/punishments/{chat_id}")
+async def get_punishment_rules(chat_id: int, x_user_data: str = Header(None)):
+    """Отримує налаштування гнучких покарань для групи."""
+    await verify_user_access(x_user_data, chat_id)
+    from bot.infrastructure.database import get_punishment_settings
+    return get_punishment_settings(chat_id)
+
+
+@router.post("/api/punishments/{chat_id}")
+async def set_punishment_rule(chat_id: int, rule: PunishmentRule, x_user_data: str = Header(None)):
+    """Встановлює правило покарання для групи."""
+    await verify_user_access(x_user_data, chat_id)
+    # Валідація даних
+    if rule.level not in [1, 2, 3]:
+        raise HTTPException(status_code=400, detail="Invalid warning level")
+    if rule.action not in ["mute", "ban"]:
+        raise HTTPException(status_code=400, detail="Invalid action type")
+
+    from bot.infrastructure.database import set_punishment_settings
+    set_punishment_settings(chat_id, rule.level, rule.action, rule.duration)
+    return {"status": "success"}

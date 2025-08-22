@@ -163,31 +163,57 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadChatSettings(chatId) {
         if (!chatId) return;
 
-        // Показуємо індикатор завантаження і ховаємо старі налаштування
         settingsLoader.classList.remove('hidden');
         settingsContainer.classList.add('hidden');
+        document.getElementById('punishments-container').parentElement.classList.add('hidden'); // Ховаємо блок покарань
 
         const isGlobal = chatId === 'global';
         document.querySelectorAll('#settings-content .manage-list-btn').forEach(btn => btn.style.display = isGlobal ? 'none' : 'block');
+        // Глобальні налаштування не мають гнучких покарань
+        document.getElementById('punishments-container').parentElement.style.display = isGlobal ? 'none' : 'block';
+
 
         try {
-            const response = await fetch(`/api/settings/${chatId}`, { headers: commonHeaders });
-            if (!response.ok) throw new Error('Не вдалося завантажити налаштування.');
-            const settings = await response.json();
+            // Завантажуємо основні налаштування
+            const settingsResponse = await fetch(`/api/settings/${chatId}`, { headers: commonHeaders });
+            if (!settingsResponse.ok) throw new Error('Не вдалося завантажити налаштування.');
+            const settings = await settingsResponse.json();
 
-            // Заповнюємо елементи новими даними
             document.getElementById('captcha-toggle').checked = settings.captcha_enabled;
             document.getElementById('spamfilter-toggle').checked = settings.spam_filter_enabled;
             document.getElementById('use-global-list-toggle').checked = settings.use_global_list;
             document.getElementById('use-custom-list-toggle').checked = settings.use_custom_list;
             document.getElementById('spam-threshold').value = settings.spam_threshold;
+            document.getElementById('antiflood-toggle').checked = settings.antiflood_enabled;
+            document.getElementById('antiflood-sensitivity').value = settings.antiflood_sensitivity;
+
+            // Завантажуємо налаштування покарань, якщо це не глобальні налаштування
+            if (!isGlobal) {
+                const punishmentsResponse = await fetch(`/api/punishments/${chatId}`, { headers: commonHeaders });
+                if (!punishmentsResponse.ok) throw new Error('Не вдалося завантажити правила покарань.');
+                const punishments = await punishmentsResponse.json();
+
+                for (const level in punishments) {
+                    const rule = punishments[level];
+                    const actionSelector = document.querySelector(`.action-selector[data-level='${level}']`);
+                    const durationInput = document.querySelector(`.duration-input[data-level='${level}']`);
+
+                    if (actionSelector) actionSelector.value = rule.action;
+                    if (durationInput) {
+                        durationInput.value = rule.duration;
+                        durationInput.disabled = rule.action === 'ban'; // Робимо поле неактивним, якщо дія - бан
+                    }
+                }
+            }
 
         } catch (error) {
             tg.showAlert(error.message);
         } finally {
-            // Ховаємо індикатор і показуємо оновлені налаштування
             settingsLoader.classList.add('hidden');
             settingsContainer.classList.remove('hidden');
+            if (chatId !== 'global') {
+                 document.getElementById('punishments-container').parentElement.classList.remove('hidden');
+            }
         }
     }
 
@@ -209,13 +235,31 @@ document.addEventListener('DOMContentLoaded', () => {
             loadChatSettings(selectedChatId);
         }
     }
+
+    async function handlePunishmentUpdate(level, action, duration) {
+        if (!selectedChatId) return;
+        try {
+            const response = await fetch(`/api/punishments/${selectedChatId}`, {
+                method: 'POST',
+                headers: commonHeaders,
+                body: JSON.stringify({ level, action, duration })
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.detail || 'Не вдалося зберегти.');
+            tg.HapticFeedback.notificationOccurred('success');
+            showToast(`✅ ${t('changes_saved') || 'Зміни збережено'}`);
+        } catch (e) {
+            tg.HapticFeedback.notificationOccurred('error');
+            showToast(`❌ ${t('error_saving') || 'Помилка збереження'}: ${e.message}`, true);
+            loadChatSettings(selectedChatId); // Перезавантажуємо налаштування у випадку помилки
+        }
+    }
+
     // === МОДУЛЬ КЕРУВАННЯ СТОРІНКОЮ СПИСКІВ СЛІВ ===
     const wordListPageModule = {
         page: document.getElementById('word-list-page'),
         title: document.getElementById('word-list-title'),
         listUl: document.getElementById('word-list-ul'),
-        blocklistForm: document.getElementById('blocklist-form'),
-        whitelistForm: document.getElementById('whitelist-form'),
         currentListType: null,
 
         init() {
@@ -234,11 +278,21 @@ document.addEventListener('DOMContentLoaded', () => {
             this.currentListType = listType;
             const isBlocklist = listType === 'blocklist';
 
+            // Оновлюємо заголовок
             this.title.innerText = isBlocklist ? t('blocklist_title') : t('whitelist_title');
-            document.getElementById('word-list-add-title').innerText = isBlocklist ? t('add_new_word_title') : t('add_new_word_title_whitelist');
-            this.blocklistForm.classList.toggle('hidden', !isBlocklist);
-            this.whitelistForm.classList.toggle('hidden', isBlocklist);
 
+            // Показуємо правильну картку
+            const blocklistCard = document.getElementById('blocklist-add-card');
+            const whitelistCard = document.getElementById('whitelist-add-card');
+
+            if (blocklistCard) {
+                blocklistCard.style.display = isBlocklist ? 'block' : 'none';
+            }
+            if (whitelistCard) {
+                whitelistCard.style.display = isBlocklist ? 'none' : 'block';
+            }
+
+            // Показуємо сторінку
             this.page.classList.remove('hidden');
             tg.BackButton.show();
             tg.onEvent('backButtonClicked', this.hide.bind(this));
@@ -542,18 +596,23 @@ document.addEventListener('DOMContentLoaded', () => {
         },
 
         renderViolators(violators) {
-             const container = document.getElementById('top-violators');
+            const container = document.getElementById('top-violators');
             if (violators.length === 0) {
                 container.innerHTML = `<div class="loading-placeholder">${t('no_violators')}</div>`;
                 return;
             }
-            container.innerHTML = violators.map(v => `
-                <div class="violator-item">
-                    <span class="violator-name">ID: ${v.user_id}</span>
-                    <span class="violator-count">${t('violations_count').replace('{count}', v.violation_count)}</span>
-                </div>
-            `).join('');
+            container.innerHTML = violators.map(v => {
+                // Використовуємо ім'я, якщо воно є, інакше показуємо ID
+                const displayName = v.user_name || `ID: ${v.user_id}`;
+                return `
+                    <div class="violator-item">
+                        <span class="violator-name">${displayName}</span>
+                        <span class="violator-count">${t('violations_count').replace('{count}', v.violation_count)}</span>
+                    </div>
+                `;
+            }).join('');
         },
+
         renderCurrentStatus(current) {
             const settings = current.settings || {};
             const warnings = current.warnings || {};
@@ -639,6 +698,35 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('spam-threshold').addEventListener('change', (e) => {
         const value = parseInt(e.target.value);
         if (value >= 5 && value <= 50) handleSettingUpdate('spam_threshold', value);
+    });
+
+    document.getElementById('antiflood-toggle').addEventListener('change', (e) => handleSettingUpdate('antiflood_enabled', e.target.checked));
+    document.getElementById('antiflood-sensitivity').addEventListener('change', (e) => {
+        const value = parseInt(e.target.value);
+        if (value >= 3 && value <= 15) handleSettingUpdate('antiflood_sensitivity', value);
+    });
+
+    // Обробники для гнучких покарань
+    document.querySelectorAll('.action-selector').forEach(selector => {
+        selector.addEventListener('change', (e) => {
+            const level = parseInt(e.target.dataset.level);
+            const action = e.target.value;
+            const durationInput = document.querySelector(`.duration-input[data-level='${level}']`);
+            durationInput.disabled = action === 'ban';
+            const duration = action === 'ban' ? 0 : parseInt(durationInput.value);
+            handlePunishmentUpdate(level, action, duration);
+        });
+    });
+
+    document.querySelectorAll('.duration-input').forEach(input => {
+        input.addEventListener('change', (e) => {
+            const level = parseInt(e.target.dataset.level);
+            const action = document.querySelector(`.action-selector[data-level='${level}']`).value;
+            const duration = parseInt(e.target.value);
+            if (action === 'mute') {
+                handlePunishmentUpdate(level, action, duration);
+            }
+        });
     });
 
     // 8. Ініціалізація

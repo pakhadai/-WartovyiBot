@@ -18,7 +18,7 @@ async def captcha_timeout(context: ContextTypes.DEFAULT_TYPE):
         await context.bot.ban_chat_member(chat_id=chat_id, user_id=user_id, until_date=None)
         await context.bot.unban_chat_member(chat_id=chat_id, user_id=user_id)
 
-        log_action(chat_id, user_id, 'captcha_timeout', 'User removed due to timeout')
+        log_action(chat_id, user_id, "Unknown User", 'captcha_timeout', 'User removed due to timeout')
         increment_daily_stat(chat_id, 'captcha_failed')
 
         await context.bot.delete_message(chat_id=chat_id, message_id=message_id)

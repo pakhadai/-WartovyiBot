@@ -40,6 +40,8 @@
     "select_chat_title": "Вибір групи/каналу",
     "loading_chats": "Завантаження...",
     "general_settings_title": "Загальні налаштування",
+    "antiflood_toggle_label": "Анти-флуд система",
+    "antiflood_sensitivity_label": "Чутливість флуду (пов-нь)",
     "captcha_toggle_label": "CAPTCHA для нових",
     "spamfilter_toggle_label": "Спам-фільтр",
     "spam_threshold_label": "Поріг спаму",
@@ -87,5 +89,13 @@
     "add_new_word_title_whitelist": "Додати слово-виняток",
     "current_list": "Поточний список",
     "manage_blocklist_btn": "Керувати Чорним списком",
-    "manage_whitelist_btn": "Керувати Білим списком"
+    "manage_whitelist_btn": "Керувати Білим списком",
+    "punishments_title": "Гнучкі покарання",
+    "punishment_level_1": "1-ше попередження",
+    "punishment_level_2": "2-ге попередження",
+    "punishment_level_3": "3-тє попередження (і наступні)",
+    "action_mute": "Мут",
+    "action_ban": "Бан",
+    "duration_minutes": "Тривалість (хв)"
+
 }

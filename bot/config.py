@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEB_APP_URL = os.getenv("WEB_APP_URL", "https://1744a1778de4.ngrok-free.app/") # URL для Web App
+WEB_APP_URL = os.getenv("WEB_APP_URL")
 
 try:
     ADMIN_ID = int(os.getenv("ADMIN_ID"))

@@ -28,17 +28,37 @@ def setup_database():
         CREATE TABLE IF NOT EXISTS group_settings (
             group_id INTEGER PRIMARY KEY, group_name TEXT, spam_threshold INTEGER DEFAULT 10,
             captcha_enabled INTEGER DEFAULT 1, spam_filter_enabled INTEGER DEFAULT 1,
-            use_global_list INTEGER DEFAULT 1, use_custom_list INTEGER DEFAULT 1
+            use_global_list INTEGER DEFAULT 1, use_custom_list INTEGER DEFAULT 1,
+            antiflood_enabled INTEGER DEFAULT 1,
+            antiflood_sensitivity INTEGER DEFAULT 5
         )
     """)
     cursor.execute(
         "CREATE TABLE IF NOT EXISTS group_admins (group_id INTEGER, user_id INTEGER, PRIMARY KEY (group_id, user_id))")
+
+    # --- Таблиця для гнучких покарань ---
+    cursor.execute("""
+            CREATE TABLE IF NOT EXISTS punishment_settings (
+                group_id INTEGER NOT NULL,
+                warning_level INTEGER NOT NULL,
+                action TEXT NOT NULL,
+                duration_minutes INTEGER DEFAULT 0,
+                PRIMARY KEY (group_id, warning_level)
+            )
+        """)
 
     # --- Безпечне додавання нових стовпців (Міграція) ---
     try:
         cursor.execute("ALTER TABLE group_settings ADD COLUMN use_global_list INTEGER DEFAULT 1")
         cursor.execute("ALTER TABLE group_settings ADD COLUMN use_custom_list INTEGER DEFAULT 1")
         logging.info("Міграція БД: Додано стовпці 'use_global_list' та 'use_custom_list'.")
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE group_settings ADD COLUMN antiflood_enabled INTEGER DEFAULT 1")
+        cursor.execute("ALTER TABLE group_settings ADD COLUMN antiflood_sensitivity INTEGER DEFAULT 5")
+        logging.info("Міграція БД: Додано стовпці 'antiflood_enabled' та 'antiflood_sensitivity'.")
     except sqlite3.OperationalError:
         pass
 
@@ -109,8 +129,14 @@ def get_group_settings(group_id: int) -> dict:
             'spam_filter_enabled': bool(settings_db['spam_filter_enabled']),
             'use_global_list': bool(settings_db['use_global_list']),
             'use_custom_list': bool(settings_db['use_custom_list']),
+            'antiflood_enabled': bool(settings_db.get('antiflood_enabled', 1)),
+            'antiflood_sensitivity': int(settings_db.get('antiflood_sensitivity', 5)),
         }
-    return get_global_settings()
+        # Для get_global_settings також потрібно додати ці поля
+    global_settings = get_global_settings()
+    global_settings['antiflood_enabled'] = True
+    global_settings['antiflood_sensitivity'] = 5
+    return global_settings
 
 
 def set_group_setting(group_id: int, key: str, value):
@@ -325,6 +351,7 @@ def setup_stats_tables(conn=None, cursor=None):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             group_id INTEGER,
             user_id INTEGER,
+            user_name TEXT, 
             action_type TEXT,
             details TEXT,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -353,13 +380,13 @@ def setup_stats_tables(conn=None, cursor=None):
         conn.close()
 
 
-def log_action(group_id: int, user_id: int, action_type: str, details: str = None):
-    """Логує дію для статистики."""
+def log_action(group_id: int, user_id: int, user_name: str, action_type: str, details: str = None):
+    """Логує дію для статистики, зберігаючи ім'я користувача."""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO action_logs (group_id, user_id, action_type, details) VALUES (?, ?, ?, ?)",
-        (group_id, user_id, action_type, details)
+        "INSERT INTO action_logs (group_id, user_id, user_name, action_type, details) VALUES (?, ?, ?, ?, ?)",
+        (group_id, user_id, user_name, action_type, details)
     )
     conn.commit()
     conn.close()
@@ -421,12 +448,12 @@ def get_group_stats(group_id: int, days: int = 30) -> dict:
 
     # Топ порушників
     cursor.execute("""
-        SELECT user_id, COUNT(*) as violation_count
+        SELECT user_id, user_name, COUNT(*) as violation_count
         FROM action_logs
         WHERE group_id = ? 
             AND action_type IN ('spam_detected', 'warning_given', 'user_banned')
             AND datetime(timestamp) >= datetime('now', '-' || ? || ' days')
-        GROUP BY user_id
+        GROUP BY user_id, user_name
         ORDER BY violation_count DESC
         LIMIT 5
     """, (group_id, days))
@@ -497,3 +524,68 @@ def get_group_current_stats(group_id: int) -> dict:
         'blocklist_count': blocklist_count,
         'whitelist_count': whitelist_count
     }
+
+
+def delete_all_group_data(group_id: int):
+    """Видаляє всі дані, пов'язані з конкретною групою."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+
+    # Список таблиць, де є дані, специфічні для групи
+    tables_to_clean = [
+        "group_settings",
+        "group_admins",
+        "warnings",
+        "group_spam_triggers",
+        "group_whitelists",
+        "action_logs",
+        "daily_stats"
+    ]
+
+    logging.info(f"Видалення всіх даних для групи {group_id}...")
+    for table in tables_to_clean:
+        # Для таблиці warnings та action_logs використовуємо chat_id/group_id
+        id_column = "chat_id" if table == "warnings" else "group_id"
+        cursor.execute(f"DELETE FROM {table} WHERE {id_column} = ?", (group_id,))
+
+    conn.commit()
+    conn.close()
+    logging.info(f"Дані для групи {group_id} успішно видалено.")
+
+
+def get_punishment_settings(group_id: int) -> dict:
+    """Отримує налаштування покарань для групи."""
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT warning_level, action, duration_minutes FROM punishment_settings WHERE group_id = ?",
+                   (group_id,))
+
+    settings = {}
+    for row in cursor.fetchall():
+        settings[row['warning_level']] = {
+            "action": row['action'],
+            "duration": row['duration_minutes']
+        }
+    conn.close()
+
+    # Якщо налаштувань немає, повертаємо стандартні
+    if not settings:
+        return {
+            1: {"action": "mute", "duration": 1440},  # 1 день
+            2: {"action": "mute", "duration": 10080},  # 7 днів
+            3: {"action": "ban", "duration": 0}
+        }
+    return settings
+
+
+def set_punishment_settings(group_id: int, level: int, action: str, duration: int):
+    """Встановлює налаштування покарання для групи."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        "REPLACE INTO punishment_settings (group_id, warning_level, action, duration_minutes) VALUES (?, ?, ?, ?)",
+        (group_id, level, action, duration)
+    )
+    conn.commit()
+    conn.close()

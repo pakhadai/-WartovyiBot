@@ -1,29 +1,29 @@
+# pakhadai/wartovyi/Wartovyi-7768a1de9d0807b9ea35ec577aa9030b711895bc/bot/features/bot_management/my_chat_member_handler.py
+
 import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 from telegram.constants import ChatMemberStatus
 
-from bot.infrastructure.database import add_group_if_not_exists, set_group_admin
+# Імпортуємо нову та існуючі функції з бази даних
+from bot.infrastructure.database import add_group_if_not_exists, set_group_admin, delete_all_group_data
 
 
 async def my_chat_member_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     my_chat_member = update.my_chat_member
-
     if not my_chat_member:
         return
 
     chat = my_chat_member.chat
     user = my_chat_member.from_user
+
+    old_status = my_chat_member.old_chat_member.status
     new_status = my_chat_member.new_chat_member.status
 
-    # Бот був доданий в новий чат як адміністратор
-    if new_status == ChatMemberStatus.ADMINISTRATOR:
+    # Випадок 1: Бота додали в новий чат як адміністратора
+    if new_status == ChatMemberStatus.ADMINISTRATOR and old_status != ChatMemberStatus.ADMINISTRATOR:
         logging.info(f"Бот був доданий в чат '{chat.title}' ({chat.id}) користувачем {user.full_name} ({user.id})")
-        add_group_if_not_exists(chat.id, chat.title)
-        logging.info(f"[DEBUG] Ensured group {chat.id} exists in DB.")
-        set_group_admin(chat.id, user.id)
-        logging.info(f"[DEBUG] Set user {user.id} as admin for group {chat.id}.")
+
         # Додаємо групу в БД, якщо її там немає
         add_group_if_not_exists(chat.id, chat.title)
 
@@ -41,4 +41,7 @@ async def my_chat_member_handler(update: Update, context: ContextTypes.DEFAULT_T
         except Exception as e:
             logging.warning(f"Не вдалося надіслати повідомлення користувачу {user.id}: {e}")
 
-    # TODO: Тут можна додати логіку, коли бота видаляють з чату або забирають права
+    # Випадок 2: Бота видалили з чату або забанили
+    elif new_status in [ChatMemberStatus.LEFT, ChatMemberStatus.BANNED]:
+        logging.info(f"Бота видалили з чату '{chat.title}' ({chat.id}). Видаляю всі пов'язані дані.")
+        delete_all_group_data(chat.id)
