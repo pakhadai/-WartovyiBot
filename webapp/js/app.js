@@ -61,23 +61,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const settingsLoader = document.getElementById('settings-loader');
     const toastElement = document.getElementById('toast-notification');
     let toastTimeout;
+    const themeToggleButton = document.getElementById('theme-toggle');
+    const langSelector = document.getElementById('lang-selector');
 
     // 4. Мультимовність та сповіщення
-    async function loadTranslations() {
+    async function loadTranslations(lang) {
+        let primaryTranslations = {};
+        let fallbackTranslations = {};
         try {
-            const response = await fetch(`/api/translations/${userLang}`);
-            translations = await response.ok ? await response.json() : {};
-        } catch (error) {
-            console.error("Failed to load primary translations:", error);
-        }
-        try {
+            const response = await fetch(`/api/translations/${lang}`);
+            if(response.ok) primaryTranslations = await response.json();
+
             const fallbackResponse = await fetch(`/api/translations/en`);
-            const fallbackTranslations = await fallbackResponse.ok ? await fallbackResponse.json() : {};
-            translations = { ...fallbackTranslations, ...translations };
+            if(fallbackResponse.ok) fallbackTranslations = await fallbackResponse.json();
+
         } catch (error) {
-            console.error("Failed to load fallback translations:", error);
-        }
-        finally {
+            console.error("Failed to load translations:", error);
+        } finally {
+            translations = { ...fallbackTranslations, ...primaryTranslations };
             applyTranslations();
         }
     }
@@ -101,6 +102,40 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isError) toastElement.classList.add('error');
         toastTimeout = setTimeout(() => { toastElement.className = 'toast'; }, 2500);
     }
+
+    // === КЕРУВАННЯ ТЕМОЮ ===
+    const sunIcon = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" ...><circle cx="12" cy="12" r="5"></circle>...</svg>`; // Іконка сонця
+    const moonIcon = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" ...><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`; // Іконка місяця
+
+    function applyTheme(theme) {
+        if (theme === 'light') {
+            document.body.classList.add('light-theme');
+            themeToggleButton.innerHTML = moonIcon;
+        } else {
+            document.body.classList.remove('light-theme');
+            themeToggleButton.innerHTML = sunIcon;
+        }
+
+        // Оновлюємо колір системних елементів Telegram
+        setTimeout(() => {
+            const styles = getComputedStyle(document.body);
+            tg.setHeaderColor(styles.getPropertyValue('--bg-secondary').trim());
+            tg.setBackgroundColor(styles.getPropertyValue('--bg-primary').trim());
+        }, 100);
+    }
+
+    themeToggleButton.addEventListener('click', () => {
+        const newTheme = document.body.classList.contains('light-theme') ? 'dark' : 'light';
+        localStorage.setItem('theme', newTheme);
+        applyTheme(newTheme);
+    });
+
+    // === КЕРУВАННЯ МОВОЮ ===
+    langSelector.addEventListener('change', (e) => {
+        const newLang = e.target.value;
+        localStorage.setItem('language', newLang);
+        loadTranslations(newLang);
+    });
 
     // 5. Навігація між сторінками
     function showPage(pageId) {
@@ -729,8 +764,17 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // 8. Ініціалізація
-    loadTranslations().then(() => {
+    // === 8. ІНІЦІАЛІЗАЦІЯ ===
+    // Застосовуємо збережену тему або тему системи
+    const savedTheme = localStorage.getItem('theme');
+    const systemTheme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    applyTheme(savedTheme || systemTheme);
+
+    // Завантажуємо переклади на основі збереженої мови або мови з Telegram
+    const savedLang = localStorage.getItem('language');
+    const initialLang = savedLang || tg.initDataUnsafe?.user?.language_code || 'uk';
+    langSelector.value = initialLang;
+    loadTranslations(initialLang).then(() => {
         showPage('home-page');
         window.statsModule.init();
         wordListPageModule.init();

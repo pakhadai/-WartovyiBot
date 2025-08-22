@@ -114,29 +114,42 @@ def set_global_setting(key: str, value):
 
 
 def get_group_settings(group_id: int) -> dict:
-    """Отримує налаштування для конкретної групи."""
+    """
+    Отримує налаштування для конкретної групи, коректно поєднуючи їх
+    з глобальними налаштуваннями за замовчуванням.
+    """
+    # 1. Спочатку отримуємо базовий набір налаштувань
+    # Це глобальні налаштування + стандартні значення для нових функцій
+    final_settings = get_global_settings()
+    final_settings['antiflood_enabled'] = True
+    final_settings['antiflood_sensitivity'] = 5
+
+    # 2. Потім шукаємо індивідуальні налаштування для групи
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM group_settings WHERE group_id = ?", (group_id,))
-    settings_db = cursor.fetchone()
+    group_specific_settings = cursor.fetchone()
     conn.close()
 
-    if settings_db:
-        return {
-            'spam_threshold': int(settings_db['spam_threshold']),
-            'captcha_enabled': bool(settings_db['captcha_enabled']),
-            'spam_filter_enabled': bool(settings_db['spam_filter_enabled']),
-            'use_global_list': bool(settings_db['use_global_list']),
-            'use_custom_list': bool(settings_db['use_custom_list']),
-            'antiflood_enabled': bool(settings_db.get('antiflood_enabled', 1)),
-            'antiflood_sensitivity': int(settings_db.get('antiflood_sensitivity', 5)),
-        }
-        # Для get_global_settings також потрібно додати ці поля
-    global_settings = get_global_settings()
-    global_settings['antiflood_enabled'] = True
-    global_settings['antiflood_sensitivity'] = 5
-    return global_settings
+    # 3. Якщо для групи є індивідуальні налаштування, оновлюємо ними базовий набір
+    if group_specific_settings:
+        # Створюємо словник з індивідуальних налаштувань
+        # dict() перетворює sqlite3.Row на звичайний словник
+        updates = dict(group_specific_settings)
+
+        # Оновлюємо значення в нашому фінальному словнику
+        final_settings.update({
+            'spam_threshold': int(updates.get('spam_threshold', 10)),
+            'captcha_enabled': bool(updates.get('captcha_enabled', 1)),
+            'spam_filter_enabled': bool(updates.get('spam_filter_enabled', 1)),
+            'use_global_list': bool(updates.get('use_global_list', 1)),
+            'use_custom_list': bool(updates.get('use_custom_list', 1)),
+            'antiflood_enabled': bool(updates.get('antiflood_enabled', 1)),
+            'antiflood_sensitivity': int(updates.get('antiflood_sensitivity', 5)),
+        })
+
+    return final_settings
 
 
 def set_group_setting(group_id: int, key: str, value):

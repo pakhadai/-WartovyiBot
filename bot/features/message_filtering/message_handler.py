@@ -34,7 +34,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if is_user_flooding(user.id, settings.get('antiflood_sensitivity', 5), context):
             try:
                 # Видаємо мут на 5 хвилин
-                mute_duration = datetime.now() + timedelta(minutes=5)
+                mute_duration = datetime.utcnow() + timedelta(minutes=5)
                 await context.bot.restrict_chat_member(
                     chat_id=chat.id, user_id=user.id,
                     permissions=ChatPermissions(can_send_messages=False),
@@ -109,7 +109,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if rule and rule.get('action') == "mute":
                 mute_duration_minutes = rule['duration']
-                mute_until = datetime.now() + timedelta(minutes=mute_duration_minutes)
+                mute_until = datetime.utcnow() + timedelta(minutes=mute_duration_minutes)
                 tasks_to_run.append(context.bot.restrict_chat_member(
                     chat_id=chat.id, user_id=user.id,
                     permissions=ChatPermissions(can_send_messages=False),
