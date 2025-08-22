@@ -143,7 +143,8 @@ document.addEventListener('DOMContentLoaded', () => {
             opt.classList.toggle('hidden', opt.dataset.lang !== validLang);
         });
         localStorage.setItem('language', validLang);
-        loadTranslations(validLang);
+        // Повертаємо Promise, щоб можна було продовжити ланцюжок
+        return loadTranslations(validLang);
     }
 
     langToggleButton.addEventListener('click', () => {
@@ -790,11 +791,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const systemTheme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
     applyTheme(savedTheme || systemTheme);
 
-    // Завантажуємо переклади на основі збереженої мови або мови з Telegram
+    // Визначаємо початкову мову користувача
     const savedLang = localStorage.getItem('language');
     const initialLang = savedLang || (tg.initDataUnsafe?.user?.language_code || 'uk').split('-')[0];
-    setLanguage(initialLang);
-    loadTranslations(validInitialLang).then(() => {
+
+    // Встановлюємо мову та чекаємо завантаження перекладів перед тим, як ініціалізувати модулі.
+    // Це виправлення гарантує, що statsModule та wordListPageModule завжди будуть запущені.
+    setLanguage(initialLang).then(() => {
         showPage('home-page');
         window.statsModule.init();
         wordListPageModule.init();
