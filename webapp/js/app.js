@@ -130,11 +130,31 @@ document.addEventListener('DOMContentLoaded', () => {
         applyTheme(newTheme);
     });
 
-    // === КЕРУВАННЯ МОВОЮ ===
-    langSelector.addEventListener('change', (e) => {
-        const newLang = e.target.value;
-        localStorage.setItem('language', newLang);
-        loadTranslations(newLang);
+    // === КЕРУВАННЯ МОВОЮ (НОВА ВЕРСІЯ) ===
+    const langToggleButton = document.getElementById('lang-toggle');
+    const langOptions = document.querySelectorAll('.lang-option');
+    const availableLangs = Array.from(langOptions).map(opt => opt.dataset.lang);
+
+    function setLanguage(langCode) {
+        // Переконуємось, що переданий код мови є валідним
+        const validLang = availableLangs.includes(langCode) ? langCode : availableLangs[0];
+
+        langOptions.forEach(opt => {
+            opt.classList.toggle('hidden', opt.dataset.lang !== validLang);
+        });
+        localStorage.setItem('language', validLang);
+        loadTranslations(validLang);
+    }
+
+    langToggleButton.addEventListener('click', () => {
+        const currentLangEl = langToggleButton.querySelector('.lang-option:not(.hidden)');
+        const currentLang = currentLangEl ? currentLangEl.dataset.lang : availableLangs[0];
+        const currentIndex = availableLangs.indexOf(currentLang);
+        const nextIndex = (currentIndex + 1) % availableLangs.length;
+        const newLang = availableLangs[nextIndex];
+
+        tg.HapticFeedback.impactOccurred('light');
+        setLanguage(newLang);
     });
 
     // 5. Навігація між сторінками
@@ -772,9 +792,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Завантажуємо переклади на основі збереженої мови або мови з Telegram
     const savedLang = localStorage.getItem('language');
-    const initialLang = savedLang || tg.initDataUnsafe?.user?.language_code || 'uk';
-    langSelector.value = initialLang;
-    loadTranslations(initialLang).then(() => {
+    const initialLang = savedLang || (tg.initDataUnsafe?.user?.language_code || 'uk').split('-')[0];
+    setLanguage(initialLang);
+    loadTranslations(validInitialLang).then(() => {
         showPage('home-page');
         window.statsModule.init();
         wordListPageModule.init();

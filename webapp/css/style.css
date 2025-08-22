@@ -82,7 +82,7 @@ body {
     line-height: 1.5;
     background: var(--bg-primary);
     color: var(--text-primary);
-    padding: 30px 16px calc(85px + env(safe-area-inset-bottom)) 16px;
+    padding: 70px 16px calc(85px + env(safe-area-inset-bottom)) 16px;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     min-height: 100vh;
@@ -160,6 +160,28 @@ body {
     font-size: 14px;
     color: var(--text-secondary);
     font-weight: 400;
+}
+
+/* --- Стилі для нової кнопки мови --- */
+.lang-btn {
+    font-size: 22px; /* Збільшуємо розмір для прапора */
+    padding: 0;
+    line-height: 1;
+}
+
+.lang-btn .lang-option {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(1);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    backface-visibility: hidden; /* Для плавності анімації */
+}
+
+.lang-btn .lang-option.hidden {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.5);
+    pointer-events: none;
 }
 
 /* Картки */
